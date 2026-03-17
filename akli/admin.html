@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم - Akli Bazar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --gold: #C9A84C; --navy: #0B1F3A; --cream: #F5F0E8; }
+        body { font-family: 'Cairo', sans-serif; background: #F0F4F8; }
+        #loginScreen { display: flex; }
+        #adminContent { display: none; }
+        .tab-btn { padding: 0.6rem 1.5rem; border-radius: 8px; font-family: 'Cairo',sans-serif; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; border: none; }
+        .tab-btn.active { background: var(--navy); color: white; }
+        .tab-btn:not(.active) { background: white; color: var(--navy); border: 2px solid #E2E8F0; }
+        .status-msg { display: none; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; font-weight: 600; }
+        .form-input { width: 100%; border: 2px solid #E2E8F0; border-radius: 10px; padding: 0.7rem 1rem; font-family: 'Cairo',sans-serif; font-size: 0.92rem; outline: none; transition: border-color 0.2s; }
+        .form-input:focus { border-color: var(--gold); }
+        .product-row { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; margin-bottom: 0.75rem; }
+        .product-row img { width: 65px; height: 65px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        .order-card { padding: 1rem; background: white; border-radius: 12px; border: 1px solid #E2E8F0; margin-bottom: 0.75rem; }
+        .badge-new { background: #DCFCE7; color: #166534; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 50px; }
+        .badge-done { background: #F1F5F9; color: #64748B; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 50px; }
+
+        /* Edit Modal */
+        .edit-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(3px); }
+        .edit-overlay.open { display: flex; }
+        .edit-box { background: white; border-radius: 20px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 2rem; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+        .edit-box h2 { font-size: 1.3rem; font-weight: 900; color: var(--navy); margin-bottom: 1.5rem; }
+        .img-preview-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 6px; margin-top: 0.5rem; }
+        .img-preview-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 2px solid #E2E8F0; }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0B1F3A] to-[#1E3D5C]">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm">
+        <div class="text-center mb-6">
+            <div class="text-3xl font-black text-[#0B1F3A] italic" style="font-family:serif">Akli Bazar</div>
+            <p class="text-gray-400 text-sm mt-1">لوحة التحكم</p>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">البريد الإلكتروني</label>
+                <input type="email" id="loginEmail" class="form-input" placeholder="admin@example.com">
+            </div>
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">كلمة المرور</label>
+                <input type="password" id="loginPass" class="form-input" placeholder="••••••••">
+            </div>
+            <button onclick="doLogin()" class="w-full bg-[#0B1F3A] text-white py-3 rounded-xl font-bold text-lg hover:bg-[#1E3D5C] transition">دخول</button>
+        </div>
+        <p id="loginErr" class="text-red-500 text-sm text-center mt-3 hidden">البريد أو كلمة المرور غير صحيحة</p>
+        <a href="index.html" class="block text-center mt-4 text-gray-400 text-sm">← العودة للمتجر</a>
+    </div>
+</div>
+
+<!-- ADMIN CONTENT -->
+<div id="adminContent" class="max-w-5xl mx-auto p-4 py-6">
+
+    <!-- Top bar -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-black text-[#0B1F3A]">لوحة التحكم</h1>
+            <p class="text-gray-400 text-sm">Akli Bazar</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="index.html" class="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-600 transition">🏪 المتجر</a>
+            <button onclick="doLogout()" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600 transition">خروج</button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-6">
+        <button class="tab-btn active" onclick="showTab('products', this)">📦 المنتجات</button>
+        <button class="tab-btn" onclick="showTab('orders', this)">📋 الطلبات</button>
+        <button class="tab-btn" onclick="showTab('add', this)">➕ إضافة منتج</button>
+    </div>
+
+    <!-- STATUS MSG -->
+    <div id="statusMsg" class="status-msg"></div>
+
+    <!-- TAB: PRODUCTS -->
+    <div id="tab-products" class="tab-content">
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <h2 class="text-lg font-black text-[#0B1F3A] mb-4">المنتجات الحالية</h2>
+            <div id="adminProductsList"><p class="text-gray-400 text-center py-6">جاري التحميل...</p></div>
+        </div>
+    </div>
+
+    <!-- TAB: ORDERS -->
+    <div id="tab-orders" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-black text-[#0B1F3A]">الطلبات الواردة</h2>
+                <span class="text-xs text-gray-400">يتجدد كل 15 ثانية</span>
+            </div>
+            <div id="ordersList"><p class="text-gray-400 text-center py-6">جاري التحميل...</p></div>
+        </div>
+    </div>
+
+    <!-- TAB: ADD PRODUCT -->
+    <div id="tab-add" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <h2 class="text-lg font-black text-[#0B1F3A] mb-4">إضافة منتج جديد</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1">اسم المنتج *</label>
+                    <input type="text" id="fTitle" class="form-input" placeholder="اسم المنتج">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">التصنيف *</label>
+                    <select id="fCategory" class="form-input">
+                        <option value="">اختر التصنيف</option>
+                        <option value="رجال">رجال</option>
+                        <option value="نساء">نساء</option>
+                        <option value="أطفال">أطفال</option>
+                        <option value="men">Men</option>
+                        <option value="إكسسوارات">إكسسوارات</option>
+                        <option value="عام">عام</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-1">السعر (د.ج) *</label>
+                <input type="number" id="fPrice" class="form-input" placeholder="السعر بالدينار">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-1">وصف المنتج</label>
+                <textarea id="fDesc" rows="4" class="form-input" placeholder="وصف تفصيلي للمنتج (المقاسات، الألوان، الكميات...)"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-1">الصورة الرئيسية * <span class="text-gray-400 font-normal">(إجباري)</span></label>
+                <input type="file" id="fImg1" accept="image/*" class="form-input">
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-bold mb-2">صور إضافية <span class="text-gray-400 font-normal">(اختياري - حتى 5 صور)</span></label>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <input type="file" id="fImg2" accept="image/*" class="form-input text-xs p-2">
+                    <input type="file" id="fImg3" accept="image/*" class="form-input text-xs p-2">
+                    <input type="file" id="fImg4" accept="image/*" class="form-input text-xs p-2">
+                    <input type="file" id="fImg5" accept="image/*" class="form-input text-xs p-2">
+                    <input type="file" id="fImg6" accept="image/*" class="form-input text-xs p-2">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">JPG, PNG, WebP — حد أقصى 5MB لكل صورة</p>
+            </div>
+            <button id="saveBtn" onclick="saveProduct()" class="w-full bg-[#0B1F3A] text-white py-4 rounded-xl font-black text-lg hover:bg-[#1E3D5C] transition">
+                ➕ إضافة المنتج
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="edit-overlay" id="editOverlay">
+    <div class="edit-box">
+        <div class="flex justify-between items-center mb-4">
+            <h2>✏️ تعديل المنتج</h2>
+            <button onclick="closeEdit()" style="background:#F1F5F9;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1rem">✕</button>
+        </div>
+
+        <input type="hidden" id="editId">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-bold mb-1">اسم المنتج</label>
+                <input type="text" id="editTitle" class="form-input">
+            </div>
+            <div>
+                <label class="block text-sm font-bold mb-1">التصنيف</label>
+                <select id="editCategory" class="form-input">
+                    <option value="رجال">رجال</option>
+                    <option value="نساء">نساء</option>
+                    <option value="أطفال">أطفال</option>
+                    <option value="men">Men</option>
+                    <option value="إكسسوارات">إكسسوارات</option>
+                    <option value="عام">عام</option>
+                </select>
+            </div>
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-bold mb-1">السعر (د.ج)</label>
+            <input type="number" id="editPrice" class="form-input">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-bold mb-1">الوصف</label>
+            <textarea id="editDesc" rows="4" class="form-input"></textarea>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-bold mb-2">الصور الحالية:</label>
+            <div id="editImgPreview" class="img-preview-grid"></div>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm font-bold mb-1">استبدال الصورة الرئيسية <span class="text-gray-400 font-normal">(اختياري)</span></label>
+            <input type="file" id="editImg1" accept="image/*" class="form-input">
+        </div>
+
+        <div class="flex gap-3">
+            <button onclick="updateProduct()" class="flex-1 bg-[#0B1F3A] text-white py-3 rounded-xl font-bold hover:bg-[#1E3D5C] transition">💾 حفظ التعديلات</button>
+            <button onclick="closeEdit()" class="px-6 bg-gray-100 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 transition">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ADMIN_EMAIL = "nourhene18306@gmail.com";
+    const ADMIN_PASS = "nourhene2003";
+    const SB_URL = 'https://jsuyvznabxhgxcitkmex.supabase.co';
+    const SB_KEY = 'sb_publishable_c3Et51hAGv-n3JDpGv8PrA_hV9JKEgF';
+    const BUCKET = 'Bucket: product-images';
+    const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+
+    // ===== AUTH =====
+    function doLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const pass = document.getElementById('loginPass').value;
+        if (email === ADMIN_EMAIL && pass === ADMIN_PASS) {
+            sessionStorage.setItem('adminLoggedIn', 'true');
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+            loadAll();
+        } else {
+            document.getElementById('loginErr').classList.remove('hidden');
+            document.getElementById('loginPass').value = '';
+        }
+    }
+
+    document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    function doLogout() {
+        sessionStorage.removeItem('adminLoggedIn');
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('adminContent').style.display = 'none';
+    }
+
+    function checkAccess() {
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+            loadAll();
+        }
+    }
+
+    // ===== TABS =====
+    function showTab(tab, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.remove('hidden');
+        btn.classList.add('active');
+    }
+
+    // ===== STATUS =====
+    let statusTimer;
+    function showStatus(msg, type) {
+        const el = document.getElementById('statusMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        el.style.background = type === 'error' ? '#FEE2E2' : '#DCFCE7';
+        el.style.color = type === 'error' ? '#991B1B' : '#166534';
+        clearTimeout(statusTimer);
+        statusTimer = setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    // ===== UPLOAD IMAGE =====
+    async function uploadImage(file) {
+        if (!file) return null;
+        const ext = file.name.split('.').pop();
+        const fileName = `product_${Date.now()}_${Math.floor(Math.random()*9999)}.${ext}`;
+        const { error } = await supabaseClient.storage.from(BUCKET).upload(fileName, file, { cacheControl: '3600', upsert: false });
+        if (error) throw new Error('فشل رفع الصورة: ' + error.message);
+        const { data } = supabaseClient.storage.from(BUCKET).getPublicUrl(fileName);
+        return data.publicUrl;
+    }
+
+    // ===== SAVE PRODUCT =====
+    async function saveProduct() {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true; btn.textContent = '⏳ جاري الرفع...';
+
+        try {
+            const title = document.getElementById('fTitle').value.trim();
+            const category = document.getElementById('fCategory').value;
+            const price = document.getElementById('fPrice').value;
+            const desc = document.getElementById('fDesc').value.trim();
+
+            if (!title || !category || !price) throw new Error('الرجاء ملء الحقول الإجبارية');
+
+            const f1 = document.getElementById('fImg1').files[0];
+            if (!f1) throw new Error('الرجاء اختيار الصورة الرئيسية');
+
+            const urls = await Promise.all([
+                uploadImage(f1),
+                uploadImage(document.getElementById('fImg2').files[0]),
+                uploadImage(document.getElementById('fImg3').files[0]),
+                uploadImage(document.getElementById('fImg4').files[0]),
+                uploadImage(document.getElementById('fImg5').files[0]),
+                uploadImage(document.getElementById('fImg6').files[0]),
+            ]);
+
+            const { error } = await supabaseClient.from('products').insert([{
+                title, category, price: parseFloat(price), description: desc,
+                image_url: urls[0], image_url_2: urls[1], image_url_3: urls[2],
+                image_url_4: urls[3], image_url_5: urls[4], image_url_6: urls[5]
+            }]);
+
+            if (error) throw new Error('خطأ في حفظ المنتج: ' + error.message);
+
+            showStatus('✅ تم إضافة المنتج بنجاح!', 'success');
+            ['fTitle','fPrice','fDesc'].forEach(id => document.getElementById(id).value = '');
+            ['fImg1','fImg2','fImg3','fImg4','fImg5','fImg6'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('fCategory').value = '';
+            fetchAdminProducts();
+
+        } catch (err) {
+            showStatus('❌ ' + err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = '➕ إضافة المنتج';
+        }
+    }
+
+    // ===== FETCH PRODUCTS =====
+    async function fetchAdminProducts() {
+        const { data, error } = await supabaseClient.from('products').select('*').order('created_at', { ascending: false });
+        const list = document.getElementById('adminProductsList');
+        if (error || !data || data.length === 0) {
+            list.innerHTML = '<p class="text-gray-400 text-center py-6">لا توجد منتجات</p>'; return;
+        }
+
+        list.innerHTML = data.map(p => {
+            const imgs = [p.image_url, p.image_url_2, p.image_url_3].filter(Boolean);
+            const imgCount = [p.image_url, p.image_url_2, p.image_url_3, p.image_url_4, p.image_url_5, p.image_url_6].filter(Boolean).length;
+            return `
+            <div class="product-row">
+                <img src="${imgs[0] || 'https://via.placeholder.com/65'}" alt="${p.title}">
+                <div style="flex:1;min-width:0">
+                    <p class="font-bold text-sm text-[#0B1F3A] truncate">${p.title}</p>
+                    <p class="text-xs text-gray-400">${p.category || 'عام'} · ${imgCount} صور</p>
+                    <p class="font-black text-[#C9A84C]">${Number(p.price).toLocaleString()} د.ج</p>
+                </div>
+                <div style="display:flex;gap:0.5rem;flex-shrink:0">
+                    <button onclick='openEdit(${JSON.stringify(p).replace(/'/g,"&#39;")})' class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-100 transition">✏️ تعديل</button>
+                    <button onclick="deleteProduct('${p.id}')" class="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-red-100 transition">🗑 حذف</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ===== DELETE =====
+    async function deleteProduct(id) {
+        if (!confirm('هل أنت متأكد من حذف هذا المنتج نهائياً؟')) return;
+        const { error } = await supabaseClient.from('products').delete().eq('id', id);
+        if (error) { showStatus('❌ خطأ في الحذف: ' + error.message, 'error'); return; }
+        showStatus('✅ تم حذف المنتج', 'success');
+        fetchAdminProducts();
+    }
+
+    // ===== EDIT =====
+    function openEdit(product) {
+        document.getElementById('editId').value = product.id;
+        document.getElementById('editTitle').value = product.title;
+        document.getElementById('editCategory').value = product.category || '';
+        document.getElementById('editPrice').value = product.price;
+        document.getElementById('editDesc').value = product.description || '';
+
+        const imgs = [product.image_url, product.image_url_2, product.image_url_3, product.image_url_4, product.image_url_5, product.image_url_6].filter(Boolean);
+        document.getElementById('editImgPreview').innerHTML = imgs.map(img =>
+            `<img src="${img}" alt="" onerror="this.style.display='none'">`
+        ).join('') || '<p class="text-gray-400 text-xs col-span-6">لا توجد صور</p>';
+
+        document.getElementById('editImg1').value = '';
+        document.getElementById('editOverlay').classList.add('open');
+    }
+
+    function closeEdit() { document.getElementById('editOverlay').classList.remove('open'); }
+
+    async function updateProduct() {
+        const id = document.getElementById('editId').value;
+        const title = document.getElementById('editTitle').value.trim();
+        const category = document.getElementById('editCategory').value;
+        const price = document.getElementById('editPrice').value;
+        const description = document.getElementById('editDesc').value.trim();
+
+        if (!title || !price) { showStatus('❌ الرجاء ملء الحقول الإجبارية', 'error'); return; }
+
+        const updateData = { title, category, price: parseFloat(price), description };
+
+        const newImg = document.getElementById('editImg1').files[0];
+        if (newImg) {
+            try {
+                const url = await uploadImage(newImg);
+                updateData.image_url = url;
+            } catch (err) {
+                showStatus('❌ ' + err.message, 'error'); return;
+            }
+        }
+
+        const { error } = await supabaseClient.from('products').update(updateData).eq('id', id);
+        if (error) { showStatus('❌ خطأ في التحديث: ' + error.message, 'error'); return; }
+
+        showStatus('✅ تم تحديث المنتج بنجاح', 'success');
+        closeEdit();
+        fetchAdminProducts();
+    }
+
+    // ===== ORDERS =====
+    async function fetchOrders() {
+        const { data, error } = await supabaseClient.from('orders').select('*').order('created_at', { ascending: false });
+        const list = document.getElementById('ordersList');
+        if (error || !data || data.length === 0) {
+            list.innerHTML = '<p class="text-gray-400 text-center py-6">لا توجد طلبات حالياً</p>'; return;
+        }
+
+        list.innerHTML = data.map((o, i) => `
+            <div class="order-card">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem">
+                    <div>
+                        <p class="font-black text-[#0B1F3A]">#${i + 1} — ${o.customer_name}</p>
+                        <p class="text-xs text-gray-400">${new Date(o.created_at).toLocaleString('ar-DZ')}</p>
+                    </div>
+                    <span class="${o.status === 'new' ? 'badge-new' : 'badge-done'}">${o.status === 'new' ? '🔔 جديد' : '✅ مكتمل'}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.82rem;color:#4A5568;margin-bottom:0.75rem">
+                    <p>📦 ${o.product_name || '—'}</p>
+                    <p>📞 ${o.customer_phone}</p>
+                    <p>📍 ${o.wilaya} - ${o.commune}</p>
+                    <p>🏷 <strong>${o.status === 'new' ? 'جديد' : 'مكتمل'}</strong></p>
+                </div>
+                <div style="display:flex;gap:0.5rem">
+                    <a href="https://wa.me/${o.customer_phone}" target="_blank" class="bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition">💬 واتساب</a>
+                    ${o.status === 'new' ? `<button onclick="markDone('${o.id}')" class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition">✅ تأكيد</button>` : ''}
+                    <button onclick="deleteOrder('${o.id}')" class="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition">🗑 حذف</button>
+                </div>
+            </div>`).join('');
+    }
+
+    async function markDone(id) {
+        await supabaseClient.from('orders').update({ status: 'done' }).eq('id', id);
+        fetchOrders();
+    }
+
+    async function deleteOrder(id) {
+        if (!confirm('حذف هذا الطلب نهائياً؟')) return;
+        await supabaseClient.from('orders').delete().eq('id', id);
+        fetchOrders();
+        showStatus('✅ تم حذف الطلب', 'success');
+    }
+
+    function loadAll() { fetchAdminProducts(); fetchOrders(); }
+    setInterval(() => { if (sessionStorage.getItem('adminLoggedIn') === 'true') fetchOrders(); }, 15000);
+
+    checkAccess();
+</script>
+</body>
+</html>
